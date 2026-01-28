@@ -38,3 +38,27 @@ global.ResizeObserver = vi.fn().mockImplementation((_callback) => ({
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }));
+
+// Mock IndexedDB for tests
+const indexedDB = {
+  open: vi.fn(() => ({
+    result: {
+      createObjectStore: vi.fn(),
+      transaction: vi.fn(() => ({
+        objectStore: vi.fn(() => ({
+          get: vi.fn(),
+          put: vi.fn(),
+          delete: vi.fn(),
+          getAllKeys: vi.fn(() => []),
+        })),
+      })),
+    },
+    onsuccess: null,
+    onerror: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })),
+};
+
+// @ts-expect-error - Mocking IndexedDB for tests
+global.indexedDB = indexedDB;
