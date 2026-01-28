@@ -3,12 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "npm i --silent && vite",
-    "build": "npm i --silent && vite build -l error && cp dist/index.html dist/404.html && echo 'Project built successfully!'",
-    "test": "npm i --silent && tsc --noEmit && eslint && vitest run --reporter=dot --silent && vite build -l error && cp dist/index.html dist/404.html && echo 'All tests passed!'",
-    "deploy": "npm i --silent && npm run build && npx -y nostr-deploy-cli deploy --skip-setup"
-  },
+"scripts": {
+  "build": "vite build -l error && cp dist/index.html dist/404.html && echo \"Project built successfully!\"",
+  "test": "tsc --noEmit && eslint && vitest run --reporter=dot --silent && vite build -l error && cp dist/index.html dist/404.html && echo \"All tests passed!\""
+},
+
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
     "@cashu/cashu-ts": "2.8.1",
@@ -97,6 +96,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
+    "@use-gesture/core": "^10.3.1",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "@webbtc/webln-types": "^3.0.0",
     "autoprefixer": "^10.4.20",
@@ -111,6 +111,7 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^6.3.5",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^3.1.4"
+    "vitest": "^3.1.4",
+    "workbox-build": "^7.4.0"
   }
 }
