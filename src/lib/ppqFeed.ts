@@ -60,55 +60,84 @@ const PLACEHOLDER_FEED: PPQFeedItem[] = [
  * Falls back to placeholder data if unavailable
  */
 export async function fetchPPQFeed(): Promise<PPQFeedItem[]> {
+  const apiKey = import.meta.env.VITE_PPQ_API_KEY as string | undefined;
+
+  if (!apiKey) {
+    console.warn('[Drift] VITE_PPQ_API_KEY not set. Using placeholder feed.');
+    return PLACEHOLDER_FEED;
+  }
+
   try {
-    const response = await fetch('/api/feed', {
-      method: 'GET',
+    const response = await fetch('https://api.ppq.ai/chat/completions', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
       },
-      // Short timeout to fail fast if endpoint doesn't exist
-      signal: AbortSignal.timeout(2000),
+      body: JSON.stringify({
+        model: 'auto',
+        messages: [
+          {
+            role: 'user',
+            content: `
+Return ONLY valid JSON.
+
+Generate exactly 5 Japanese language learning items.
+
+Format:
+{
+  "items": [
+    {
+      "id": "uuid",
+      "jp": "Japanese text",
+      "en": "English translation",
+      "level": "N5 | N4 | N3 | N2",
+      "mediaPrompt": "short vertical video scene description"
+    }
+  ]
+}
+            `.trim(),
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 1200,
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+      throw new Error(`PPQ returned ${response.status}: ${await response.text()}`);
     }
 
     const data = await response.json();
-    
-    // Validate response structure
-    if (Array.isArray(data) && data.length > 0) {
-      // Basic validation - check if items have required fields
-      const isValid = data.every((item: unknown) => 
-        typeof item === 'object' &&
-        item !== null &&
-        'id' in item &&
-        'jp' in item &&
-        'en' in item &&
-        'level' in item
-      );
+    const content = data?.choices?.[0]?.message?.content;
 
-      if (isValid) {
-        return data as PPQFeedItem[];
-      }
+    if (typeof content !== 'string') {
+      throw new Error('No message content in PPQ response');
     }
 
-    throw new Error('Invalid API response format');
+    const parsed = JSON.parse(content);
+    const items = parsed?.items;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('Invalid PPQ response structure');
+    }
+
+    return items
+      .slice(0, 5)
+      .map((item: any, index: number) => ({
+        id: item.id || `ppq-${Date.now()}-${index}`,
+        jp: item.jp ?? '',
+        en: item.en ?? '',
+        level: (item.level as PPQFeedItem['level']) || 'N5',
+        mediaPrompt: item.mediaPrompt,
+      }))
+      .filter(item => item.jp && item.en);
   } catch (error) {
-    // API unavailable - use placeholder and log warning
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.warn(
-        '%c[Drift] AI feed API unavailable (static deployment). Using placeholder content.\n' +
-        'To enable AI-generated content, deploy with server-side support (e.g., Vercel, Netlify Functions).',
-        'color: #f59e0b; font-weight: bold;'
-      );
-    } else {
-      console.warn('[Drift] Failed to fetch AI feed, using placeholder:', error);
-    }
-    
+    console.warn('[Drift] Failed to fetch PPQ feed, using placeholder:', error);
     return PLACEHOLDER_FEED;
   }
 }
+
 
 /**
  * Convert PPQ feed item to Drift Snippet
@@ -133,32 +162,33 @@ export function ppqItemToSnippet(item: PPQFeedItem, language: string = 'ja'): im
   else lengthClass = 'paragraph';
 
   return {
-    id: item.id,
-    text: item.jp,
-    language: language as import('@/types/snippet').LanguageCode,
-    translation: item.en,
-    dialectTag: '標準語',
-    topicTags: ['ai-generated', 'media-backed'],
-    lengthClass,
-    difficultyEstimate: levelToDifficulty[item.level] || 3,
-    source: {
-      isAiGenerated: true,
-      curatorPubkey: undefined,
-      originalAuthorPubkey: undefined,
-    },
-    createdAt: now,
-    safetyFlags: {
-      sensitive: false,
-      profanity: false,
-      adult: false,
-    },
-    popularity: {
-      likes: 0,
-      dislikes: 0,
-      saves: 0,
-      zaps: 0,
-      zapAmount: 0,
-    },
-    // Note: mediaPrompt is available but not stored in Snippet structure
-  };
+  id: item.id,
+  text: item.jp,
+  language: language as LanguageCode,
+  translation: item.en,
+  dialectTag: '標準語',
+  topicTags: ['ai-generated', 'media-backed'],
+  lengthClass,
+  difficultyEstimate: levelToDifficulty[item.level] || 3,
+  source: {
+    isAiGenerated: true,
+    curatorPubkey: undefined,
+    originalAuthorPubkey: undefined,
+  },
+  createdAt: now,
+  safetyFlags: {
+    sensitive: false,
+    profanity: false,
+    adult: false,
+  },
+  popularity: {
+    likes: 0,
+    dislikes: 0,
+    saves: 0,
+    zaps: 0,
+    zapAmount: 0,
+  },
+  mediaPrompt: item.mediaPrompt,
+};
+
 }

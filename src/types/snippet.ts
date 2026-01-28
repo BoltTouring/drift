@@ -98,6 +98,9 @@ export interface Snippet {
   translation?: string;
   /** For Japanese: furigana reading data */
   furigana?: FuriganaSegment[];
+  /** 🎬 Optional AI media prompt (image/video background) */
+  mediaPrompt?: string;
+}
 }
 
 /**
