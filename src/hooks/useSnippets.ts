@@ -327,8 +327,10 @@ export function useGenerateSnippets() {
     mutationFn: async (options?: {
       language?: string;
       count?: number;
+      preferences?: UserPreferences;
     }) => {
-      const prefs = prefsQuery.preferences || DEFAULT_PREFERENCES;
+      // Use provided preferences, or get from hook, or fallback to defaults
+      const prefs = options?.preferences || prefsQuery.preferences || DEFAULT_PREFERENCES;
       const language = (options?.language || prefs.targetLanguage) as LanguageCode;
       const count = options?.count || Math.max(10, prefs.offlineCacheSize);
 
