@@ -316,6 +316,15 @@ export function useSnippetInteractionData(snippetId: string | undefined) {
 }
 
 /**
+ * Options for generating snippets
+ */
+export interface GenerateSnippetsOptions {
+  language?: string;
+  count?: number;
+  preferences?: UserPreferences;
+}
+
+/**
  * Hook to manually generate snippets
  * Useful for triggering content generation on demand
  */
@@ -323,12 +332,8 @@ export function useGenerateSnippets() {
   const queryClient = useQueryClient();
   const prefsQuery = usePreferences();
 
-  return useMutation({
-    mutationFn: async (options?: {
-      language?: string;
-      count?: number;
-      preferences?: UserPreferences;
-    }) => {
+  return useMutation<Snippet[], Error, GenerateSnippetsOptions | void>({
+    mutationFn: async (options?: GenerateSnippetsOptions) => {
       // Use provided preferences, or get from hook, or fallback to defaults
       const prefs = options?.preferences || prefsQuery.preferences || DEFAULT_PREFERENCES;
       const language = (options?.language || prefs.targetLanguage) as LanguageCode;
