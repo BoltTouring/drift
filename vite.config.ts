@@ -65,4 +65,18 @@ export default defineConfig(() => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Exclude API directory from client build
+    rollupOptions: {
+      external: (id) => {
+        // Exclude api/ directory from bundling
+        if (id.startsWith('./api/') || id.startsWith('../api/') || id.includes('/api/')) {
+          return true;
+        }
+        return false;
+      },
+    },
+  },
+  // Exclude api directory from being processed by Vite
+  publicDir: 'public',
 }));

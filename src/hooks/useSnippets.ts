@@ -26,6 +26,7 @@ import {
 } from '@/lib/storage';
 import { rankSnippets, rebuildPersonalizationProfile } from '@/lib/personalization';
 import { generateSnippets } from '@/lib/snippetGenerator';
+import { fetchPPQFeed, ppqItemToSnippet } from '@/lib/ppqFeed';
 import { useCurrentUser } from './useCurrentUser';
 import { usePreferences } from './usePreferences';
 
@@ -41,6 +42,18 @@ export function useSnippets(preferences: UserPreferences) {
     queryFn: async ({ signal }) => {
       // First, check cache for quick initial load
       const cached = await CacheStorage.getCachedSnippets();
+      
+      // Try PPQ.ai feed first (for Japanese only, or if API supports other languages)
+      let ppqSnippets: Snippet[] = [];
+      if (preferences.targetLanguage === 'ja') {
+        try {
+          const ppqFeed = await fetchPPQFeed();
+          ppqSnippets = ppqFeed.map(item => ppqItemToSnippet(item, preferences.targetLanguage));
+        } catch (error) {
+          console.warn('Failed to fetch PPQ feed:', error);
+          // Continue with other sources
+        }
+      }
       
       // Try to fetch from Nostr (with shorter timeout for better UX)
       let nostrSnippets: Snippet[] = [];
@@ -68,8 +81,13 @@ export function useSnippets(preferences: UserPreferences) {
         // Continue with cache/generation fallback
       }
 
+      // Combine sources: PPQ first, then Nostr, then cache
       // Filter by preferences
-      let filtered = nostrSnippets.length > 0 ? nostrSnippets : cached;
+      let filtered = ppqSnippets.length > 0 
+        ? ppqSnippets 
+        : nostrSnippets.length > 0 
+          ? nostrSnippets 
+          : cached;
 
       // Filter by length class
       const lengthOrder = ['word', 'phrase', 'sentence', 'paragraph'];
