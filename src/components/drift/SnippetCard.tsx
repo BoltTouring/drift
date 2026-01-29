@@ -5,13 +5,14 @@
  * Supports word tapping, meaning reveal, and microactions.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ThumbsUp, ThumbsDown, Star, Zap, Eye, Bot, Volume2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { Snippet } from '@/types/snippet';
 import { JapaneseText } from './JapaneseText';
 import { generatePlaceholderGradient } from '@/lib/imageGenerator';
+import { fetchGif, getMediaType } from '@/lib/mediaService';
 import { useTTS } from '@/hooks/useTTS';
 
 interface SnippetCardProps {
@@ -49,8 +50,11 @@ export function SnippetCard({
 }: SnippetCardProps) {
   const [showMeaningButton, setShowMeaningButton] = useState(false);
   const [meaningRevealed, setMeaningRevealed] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
+  const [gifUrl, setGifUrl] = useState<string | null>(null);
+  const [kenBurnsVariant] = useState(() => Math.floor(Math.random() * 3) + 1);
+  const mediaFetchedRef = useRef(false);
 
   // TTS for audio playback - uses cached audioUrl if available, autoplay when active
   const { speak, stop, isPlaying, isLoading } = useTTS({
@@ -79,8 +83,6 @@ export function SnippetCard({
     if (isActive) {
       setShowMeaningButton(false);
       setMeaningRevealed(false);
-      setImageLoaded(false);
-      setImageError(false);
 
       const timer = setTimeout(() => {
         setShowMeaningButton(true);
@@ -90,21 +92,50 @@ export function SnippetCard({
     }
   }, [isActive, snippet.id]);
 
-  // Preload image
+  // Fetch GIF for this snippet (once per snippet)
   useEffect(() => {
+    if (mediaFetchedRef.current) return;
+    mediaFetchedRef.current = true;
+
+    // If snippet already has a mediaUrl, use it
     if (snippet.mediaUrl) {
       const img = new Image();
-      img.onload = () => setImageLoaded(true);
-      img.onerror = () => setImageError(true);
+      img.onload = () => setMediaLoaded(true);
+      img.onerror = () => setMediaError(true);
       img.src = snippet.mediaUrl;
+      return;
     }
-  }, [snippet.mediaUrl]);
 
-  // Background style - image or gradient fallback
+    // Otherwise, fetch a GIF
+    fetchGif(snippet.text, snippet.mediaPrompt).then(url => {
+      if (url) {
+        setGifUrl(url);
+        // Preload the GIF
+        const img = new Image();
+        img.onload = () => setMediaLoaded(true);
+        img.onerror = () => setMediaError(true);
+        img.src = url;
+      }
+    });
+  }, [snippet.id, snippet.text, snippet.mediaPrompt, snippet.mediaUrl]);
+
+  // Determine the media URL to use (GIF takes priority)
+  const activeMediaUrl = gifUrl || snippet.mediaUrl;
+  const mediaType = activeMediaUrl ? getMediaType(activeMediaUrl) : null;
+  const isGif = mediaType === 'gif';
+
+  // Ken Burns class for static images (not GIFs - they're already animated)
+  const kenBurnsClass = !isGif && mediaLoaded
+    ? kenBurnsVariant === 1 ? 'ken-burns'
+    : kenBurnsVariant === 2 ? 'ken-burns-2'
+    : 'ken-burns-3'
+    : '';
+
+  // Background style - GIF, image, or gradient fallback
   const backgroundStyle = useMemo(() => {
-    if (snippet.mediaUrl && imageLoaded && !imageError) {
+    if (activeMediaUrl && mediaLoaded && !mediaError) {
       return {
-        backgroundImage: `url(${snippet.mediaUrl})`,
+        backgroundImage: `url(${activeMediaUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       };
@@ -115,7 +146,7 @@ export function SnippetCard({
       };
     }
     return {};
-  }, [snippet.mediaUrl, snippet.mediaPrompt, imageLoaded, imageError]);
+  }, [activeMediaUrl, snippet.mediaPrompt, mediaLoaded, mediaError]);
 
   const handleMeaningReveal = useCallback(() => {
     setMeaningRevealed(!meaningRevealed);
@@ -135,10 +166,42 @@ export function SnippetCard({
   }, [isJapanese, furiganaMode]);
 
   return (
-    <div
-      className="relative flex flex-col h-full w-full overflow-hidden"
-      style={backgroundStyle}
-    >
+    <div className="relative flex flex-col h-full w-full overflow-hidden">
+      {/* Animated background layer (Ken Burns for images, static for GIFs) */}
+      <div
+        className={cn(
+          "absolute inset-0 transition-opacity duration-500",
+          mediaLoaded ? "opacity-100" : "opacity-0",
+          kenBurnsClass
+        )}
+        style={backgroundStyle}
+      />
+
+      {/* Gradient placeholder while loading */}
+      {!mediaLoaded && snippet.mediaPrompt && (
+        <div
+          className="absolute inset-0"
+          style={{ background: generatePlaceholderGradient(snippet.mediaPrompt) }}
+        />
+      )}
+
+      {/* Floating particles for extra life */}
+      {isActive && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="particle"
+              style={{
+                left: `${15 + i * 15}%`,
+                animationDelay: `${i * 1.2}s`,
+                animationDuration: `${6 + i * 0.5}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Gradient overlay for text readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70 pointer-events-none" />
 
