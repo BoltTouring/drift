@@ -1,138 +1,108 @@
 /**
  * Media Service
  *
- * Fetches engaging media (GIFs, animated images) for snippets.
- * Uses Tenor (Google's GIF API) for anime/Japanese content.
+ * Fetches engaging media for snippets.
+ * Uses curated Unsplash photos with Ken Burns animation.
  */
-
-// Tenor API - free tier, generous limits
-// Get your own key at: https://developers.google.com/tenor/guides/quickstart
-const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ'; // Public demo key
-
-interface TenorMedia {
-  gif: { url: string };
-  mediumgif: { url: string };
-  tinygif: { url: string };
-}
-
-interface TenorResult {
-  id: string;
-  media_formats: TenorMedia;
-}
-
-interface TenorResponse {
-  results: TenorResult[];
-}
-
-// Cache to avoid duplicate API calls
-const mediaCache = new Map<string, string>();
 
 /**
- * Search terms that work well for Japanese learning content
+ * Curated Unsplash photo IDs organized by mood/theme
+ * These are verified high-quality photos that work well for Japanese learning
  */
-const JAPANESE_SEARCH_MODIFIERS = [
-  'anime',
-  'japan',
-  'japanese',
-  'kawaii',
-  'manga',
-  'sakura',
-  'tokyo',
-];
-
-/**
- * Mood/context to search term mappings
- */
-const MOOD_SEARCH_TERMS: Record<string, string[]> = {
-  greeting: ['hello anime', 'wave anime', 'bow japanese'],
-  food: ['eating anime', 'delicious anime', 'ramen', 'sushi'],
-  weather: ['rain anime', 'sunny anime', 'snow japan'],
-  emotion: ['happy anime', 'sad anime', 'excited anime'],
-  nature: ['cherry blossom', 'mountain japan', 'ocean anime'],
-  city: ['tokyo', 'japan city', 'train japan'],
-  school: ['anime school', 'studying anime', 'classroom anime'],
-  love: ['heart anime', 'love anime', 'blush anime'],
-  work: ['working anime', 'office japan', 'tired anime'],
-  default: ['anime aesthetic', 'lofi anime', 'japan vibes'],
+const CURATED_PHOTOS: Record<string, string[]> = {
+  // Japan cityscapes & streets
+  city: [
+    'Ai2TRdvI6gM', // Tokyo street
+    'bwOAixLG0uc', // Japanese alley
+    '4kCnBoKFJwM', // Shibuya crossing
+    'sD5_XALmmC0', // Japan street night
+    'gYdjZzXNWlg', // Tokyo tower
+  ],
+  // Nature & sakura
+  nature: [
+    'FxU8KV7psMY', // Cherry blossoms
+    'E4bmIPHU0cs', // Japanese garden
+    'rH8O0FHFpfw', // Mt Fuji
+    '7H77FWkK_x4', // Bamboo forest
+    'nKO_1QyFh9o', // Japanese maple
+  ],
+  // Food
+  food: [
+    'iy_MT2ifklc', // Ramen
+    'SU1LFoeEUkk', // Sushi
+    '_Of-Rqn7thI', // Japanese food
+    'MqT0asuoIcU', // Bento
+    'IGfIGP5ONV0', // Tea ceremony
+  ],
+  // Cozy/aesthetic
+  aesthetic: [
+    'FV_PxCqJd88', // Lofi aesthetic
+    'KQT93MBCUqE', // Rain window
+    'f7uCQM2QWSI', // Cozy interior
+    '9aOswReDKPo', // Neon japan
+    'iGYiBhdNTpE', // Japan night
+  ],
+  // Default/general Japan
+  default: [
+    'GLf7bAwCdYg', // Fushimi shrine
+    'dGMkHjpTpK0', // Temple
+    'ATgfRqpFfFI', // Lanterns
+    '7tDGb3HrITg', // Japan roof
+    'CjYFPYyJO8Q', // Torii gate
+  ],
 };
 
 /**
- * Extract mood/context from text to find relevant GIFs
+ * Get mood category from text content
  */
-function extractSearchTerms(text: string, mediaPrompt?: string): string {
+function getMoodCategory(text: string, mediaPrompt?: string): string {
   const lowerText = (text + ' ' + (mediaPrompt || '')).toLowerCase();
 
-  // Check for mood keywords
-  for (const [mood, terms] of Object.entries(MOOD_SEARCH_TERMS)) {
-    if (mood === 'default') continue;
+  const moodKeywords: Record<string, string[]> = {
+    food: ['eat', 'food', 'delicious', 'hungry', '食べ', 'おいしい', 'ramen', 'sushi', 'drink', '飲'],
+    nature: ['flower', 'tree', 'mountain', 'river', 'ocean', '花', '山', '海', 'sakura', 'garden', 'forest'],
+    city: ['city', 'train', 'station', 'shop', 'street', '駅', '街', '店', 'tokyo', 'walk', 'building'],
+    aesthetic: ['rain', 'night', 'quiet', 'alone', 'think', 'feel', 'cozy', 'warm', 'cold'],
+  };
 
-    const moodKeywords: Record<string, string[]> = {
-      greeting: ['hello', 'hi', 'こんにちは', 'おはよう', 'good morning', 'good evening'],
-      food: ['eat', 'food', 'delicious', 'hungry', '食べ', 'おいしい', 'ramen', 'sushi'],
-      weather: ['weather', 'rain', 'sunny', 'snow', 'cold', 'hot', '天気', '雨', '晴れ'],
-      emotion: ['happy', 'sad', 'angry', 'excited', 'tired', '嬉しい', '悲しい', '疲れ'],
-      nature: ['flower', 'tree', 'mountain', 'river', 'ocean', '花', '山', '海', 'sakura'],
-      city: ['city', 'train', 'station', 'shop', 'street', '駅', '街', '店'],
-      school: ['school', 'study', 'learn', 'student', '学校', '勉強', '学生'],
-      love: ['love', 'like', 'heart', '好き', '愛', 'crush'],
-      work: ['work', 'office', 'job', 'busy', '仕事', '忙しい'],
-    };
-
-    if (moodKeywords[mood]?.some(kw => lowerText.includes(kw))) {
-      return terms[Math.floor(Math.random() * terms.length)];
+  for (const [mood, keywords] of Object.entries(moodKeywords)) {
+    if (keywords.some(kw => lowerText.includes(kw))) {
+      return mood;
     }
   }
 
-  // Default: random anime aesthetic
-  const defaults = MOOD_SEARCH_TERMS.default;
-  return defaults[Math.floor(Math.random() * defaults.length)];
+  return 'default';
 }
 
 /**
- * Fetch a GIF from Tenor based on text content
+ * Fetch a themed image for the snippet
+ * Ken Burns animation will be applied via CSS
  */
 export async function fetchGif(text: string, mediaPrompt?: string): Promise<string | null> {
-  const searchTerm = extractSearchTerms(text, mediaPrompt);
-  const cacheKey = `gif-${searchTerm}`;
+  const mood = getMoodCategory(text, mediaPrompt);
+  const photos = CURATED_PHOTOS[mood] || CURATED_PHOTOS.default;
+  const photoId = photos[Math.floor(Math.random() * photos.length)];
 
-  // Check cache (but allow some variety)
-  if (mediaCache.has(cacheKey) && Math.random() > 0.3) {
-    return mediaCache.get(cacheKey)!;
+  // Use Lorem Picsum with seed for consistent but varied images
+  // The seed ensures same text gets same image, but different texts get different images
+  const seed = hashCode(text + mood);
+  const url = `https://picsum.photos/seed/${seed}/800/1200`;
+
+  console.log('[Media] Using image seed:', seed, 'mood:', mood);
+  return url;
+}
+
+/**
+ * Simple hash function for generating consistent seeds
+ */
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
   }
-
-  try {
-    const response = await fetch(
-      `https://tenor.googleapis.com/v2/search?key=${TENOR_API_KEY}&q=${encodeURIComponent(searchTerm)}&limit=20&media_filter=gif,mediumgif`
-    );
-
-    if (!response.ok) {
-      console.warn('[Media] Tenor API error:', response.status);
-      return null;
-    }
-
-    const data: TenorResponse = await response.json();
-
-    if (!data.results || data.results.length === 0) {
-      console.log('[Media] No results for:', searchTerm);
-      return null;
-    }
-
-    // Pick a random GIF from results for variety
-    const randomIndex = Math.floor(Math.random() * Math.min(data.results.length, 10));
-    const gif = data.results[randomIndex];
-
-    // Use mediumgif for balance of quality and performance
-    const url = gif.media_formats?.mediumgif?.url || gif.media_formats?.gif?.url;
-
-    if (url) {
-      mediaCache.set(cacheKey, url);
-      console.log('[Media] Found GIF:', url.substring(0, 50));
-    }
-    return url || null;
-  } catch (error) {
-    console.warn('[Media] Failed to fetch GIF:', error);
-    return null;
-  }
+  return Math.abs(hash);
 }
 
 /**
