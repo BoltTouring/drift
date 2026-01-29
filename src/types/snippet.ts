@@ -102,6 +102,8 @@ export interface Snippet {
   mediaPrompt?: string;
   /** Generated image URL from mediaPrompt */
   mediaUrl?: string;
+  /** 🔊 Cached audio URL for TTS (pre-generated, native quality) */
+  audioUrl?: string;
 }
 
 /**

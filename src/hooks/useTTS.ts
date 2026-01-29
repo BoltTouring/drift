@@ -2,30 +2,39 @@
  * TTS Hook
  *
  * React hook for text-to-speech functionality.
- * Uses AI TTS when available, falls back to browser TTS.
+ * Prefers cached audio URLs, falls back to AI TTS, then browser TTS.
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { generateSpeech, playBrowserTTS, stopTTS, preloadVoices } from '@/lib/tts';
+import { generateSpeech, stopTTS, preloadVoices } from '@/lib/tts';
 
 export interface UseTTSOptions {
   language?: string;
+  /** Pre-generated audio URL (highest quality, cached) */
+  audioUrl?: string;
+  /** Auto-play when component mounts or audioUrl changes */
+  autoPlay?: boolean;
 }
 
 export interface UseTTSResult {
+  /** Play audio for the given text (or use cached audioUrl) */
   speak: (text: string) => Promise<void>;
+  /** Stop current playback */
   stop: () => void;
+  /** Play the cached audioUrl directly */
+  playAudio: () => Promise<void>;
   isPlaying: boolean;
   isLoading: boolean;
   error: string | null;
 }
 
 export function useTTS(options: UseTTSOptions = {}): UseTTSResult {
-  const { language = 'ja-JP' } = options;
+  const { language = 'ja-JP', audioUrl, autoPlay = false } = options;
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hasAutoPlayedRef = useRef(false);
 
   // Preload voices on mount
   useEffect(() => {
@@ -52,62 +61,109 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSResult {
     setIsPlaying(false);
   }, []);
 
+  // Play a specific audio URL
+  const playAudioUrl = useCallback(
+    async (url: string): Promise<boolean> => {
+      try {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+
+        return new Promise((resolve) => {
+          audio.onplay = () => {
+            setIsPlaying(true);
+            setIsLoading(false);
+          };
+          audio.onended = () => {
+            setIsPlaying(false);
+            resolve(true);
+          };
+          audio.onerror = () => {
+            setError('Audio playback failed');
+            setIsPlaying(false);
+            setIsLoading(false);
+            resolve(false);
+          };
+
+          audio.play().catch(() => {
+            // Autoplay blocked - user needs to interact first
+            setIsLoading(false);
+            resolve(false);
+          });
+        });
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
+  // Play cached audio directly
+  const playAudio = useCallback(async () => {
+    if (!audioUrl) {
+      setError('No audio URL available');
+      return;
+    }
+
+    stop();
+    setError(null);
+    setIsLoading(true);
+
+    await playAudioUrl(audioUrl);
+  }, [audioUrl, stop, playAudioUrl]);
+
+  // Speak text - uses cached URL if available, otherwise generates
   const speak = useCallback(
     async (text: string) => {
-      // Stop any current playback
       stop();
       setError(null);
       setIsLoading(true);
 
+      // 1. Try cached audio URL first (best quality)
+      if (audioUrl) {
+        const success = await playAudioUrl(audioUrl);
+        if (success) return;
+      }
+
+      // 2. Try AI TTS generation
       try {
-        // Try AI TTS first
-        const audioUrl = await generateSpeech({ text, language });
+        const generatedUrl = await generateSpeech({ text, language });
 
-        if (audioUrl) {
-          // Play AI-generated audio
-          const audio = new Audio(audioUrl);
-          audioRef.current = audio;
-
-          audio.onplay = () => setIsPlaying(true);
-          audio.onended = () => setIsPlaying(false);
-          audio.onerror = () => {
-            setError('Audio playback failed');
-            setIsPlaying(false);
-          };
-
-          await audio.play();
-        } else {
-          // Fall back to browser TTS
-          setIsPlaying(true);
-          playBrowserTTS(text, language);
-
-          // Browser TTS doesn't have reliable end event, estimate duration
-          const estimatedDuration = Math.max(text.length * 150, 1000);
-          setTimeout(() => setIsPlaying(false), estimatedDuration);
+        if (generatedUrl) {
+          await playAudioUrl(generatedUrl);
+          return;
         }
       } catch (err) {
-        console.error('[TTS] Error:', err);
-        setError(err instanceof Error ? err.message : 'TTS failed');
-
-        // Try browser TTS as last resort
-        try {
-          setIsPlaying(true);
-          playBrowserTTS(text, language);
-          const estimatedDuration = Math.max(text.length * 150, 1000);
-          setTimeout(() => setIsPlaying(false), estimatedDuration);
-        } catch {
-          setIsPlaying(false);
-        }
-      } finally {
-        setIsLoading(false);
+        console.warn('[TTS] AI generation failed:', err);
       }
+
+      // 3. No good audio available
+      setIsLoading(false);
+      setError('Audio not available');
     },
-    [language, stop]
+    [audioUrl, language, stop, playAudioUrl]
   );
+
+  // Auto-play when audioUrl is available and autoPlay is enabled
+  useEffect(() => {
+    if (autoPlay && audioUrl && !hasAutoPlayedRef.current) {
+      hasAutoPlayedRef.current = true;
+      // Small delay to allow component to settle
+      const timer = setTimeout(() => {
+        playAudio();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPlay, audioUrl, playAudio]);
+
+  // Reset autoplay flag when audioUrl changes
+  useEffect(() => {
+    hasAutoPlayedRef.current = false;
+  }, [audioUrl]);
 
   return {
     speak,
     stop,
+    playAudio,
     isPlaying,
     isLoading,
     error,

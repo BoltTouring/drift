@@ -52,9 +52,11 @@ export function SnippetCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // TTS for audio playback
+  // TTS for audio playback - uses cached audioUrl if available, autoplay when active
   const { speak, stop, isPlaying, isLoading } = useTTS({
     language: targetLanguage === 'ja' ? 'ja-JP' : 'en-US',
+    audioUrl: snippet.audioUrl,
+    autoPlay: isActive, // Auto-play when this card becomes active
   });
 
   const handlePlayAudio = useCallback(() => {
