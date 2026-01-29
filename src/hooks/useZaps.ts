@@ -201,14 +201,14 @@ export function useZaps(
 
       const zapAmount = amount * 1000; // convert to millisats
 
+      // Type assertion needed: nostr-tools nip57 types have changed
       const zapRequest = nip57.makeZapRequest({
         profile: actualTarget.pubkey,
-        // Type assertion: event can be NostrEvent (for 'a' tag) or string ID (for 'e' tag)
-        event: event as any,
+        event: event,
         amount: zapAmount,
         relays: config.relayMetadata.relays.map(r => r.url),
         comment
-      });
+      } as any);
 
       // Sign the zap request (but don't publish to relays - only send to LNURL endpoint)
       if (!user.signer) {
