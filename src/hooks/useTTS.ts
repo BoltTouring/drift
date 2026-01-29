@@ -124,7 +124,7 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSResult {
         if (success) return;
       }
 
-      // 2. Try AI TTS generation
+      // 2. Try VoiceVox TTS generation (if server is running)
       try {
         const generatedUrl = await generateSpeech({ text, language });
 
@@ -133,12 +133,12 @@ export function useTTS(options: UseTTSOptions = {}): UseTTSResult {
           return;
         }
       } catch (err) {
-        console.warn('[TTS] AI generation failed:', err);
+        // VoiceVox not available - this is fine, audio is optional
+        console.info('[TTS] VoiceVox not running');
       }
 
-      // 3. No good audio available
+      // 3. No audio available - this is okay, not an error
       setIsLoading(false);
-      setError('Audio not available');
     },
     [audioUrl, language, stop, playAudioUrl]
   );

@@ -1,8 +1,8 @@
 /**
  * Text-to-Speech Service
  *
- * Provides AI-generated audio for snippets using PPQ.ai (OpenAI-compatible TTS).
- * Falls back to browser TTS when API is unavailable.
+ * Provides AI-generated audio for snippets using VoiceVox TTS.
+ * VoiceVox provides natural-sounding Japanese speech synthesis.
  */
 
 // Audio cache to avoid regenerating
@@ -11,48 +11,36 @@ const audioCache = new Map<string, string>();
 export interface TTSOptions {
   text: string;
   language?: string;
-  voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
-  speed?: number;
+  speaker?: number; // VoiceVox speaker ID (default: 四国めたん)
 }
 
 /**
- * Generate speech audio from text using PPQ.ai TTS
- * Returns a blob URL for the audio
+ * Generate speech audio from text using VoiceVox TTS
+ * Returns a blob URL for the audio, or null if unavailable
  */
 export async function generateSpeech(options: TTSOptions): Promise<string | null> {
-  const { text, voice = 'nova', speed = 1.0 } = options;
+  const { text, speaker = 2 } = options;
 
   // Check cache first
-  const cacheKey = `${text}-${voice}-${speed}`;
+  const cacheKey = `${text}-${speaker}`;
   if (audioCache.has(cacheKey)) {
     return audioCache.get(cacheKey)!;
   }
 
-  const apiKey = import.meta.env.VITE_PPQ_API_KEY as string | undefined;
-
-  if (!apiKey) {
-    console.warn('[TTS] No API key, falling back to browser TTS');
-    return null;
-  }
-
   try {
-    const response = await fetch('https://api.ppq.ai/audio/speech', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'tts-1',
-        input: text,
-        voice,
-        speed,
-        response_format: 'mp3',
-      }),
+    // Try our VoiceVox API endpoint
+    const params = new URLSearchParams({
+      text,
+      speaker: speaker.toString(),
+      format: 'mp3',
     });
 
+    const response = await fetch(`/api/tts?${params}`);
+
     if (!response.ok) {
-      throw new Error(`TTS API error: ${response.status}`);
+      // VoiceVox not available - that's okay, audio is optional
+      console.info('[TTS] VoiceVox not available (run docker to enable)');
+      return null;
     }
 
     // Get audio blob and create URL
@@ -64,7 +52,8 @@ export async function generateSpeech(options: TTSOptions): Promise<string | null
 
     return audioUrl;
   } catch (error) {
-    console.warn('[TTS] API failed, falling back to browser TTS:', error);
+    // Network error or API not running - audio is optional
+    console.info('[TTS] TTS API not available:', error);
     return null;
   }
 }
