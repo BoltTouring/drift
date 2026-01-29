@@ -5,7 +5,7 @@
  * Supports word tapping, meaning reveal, and microactions.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ThumbsUp, ThumbsDown, Star, Zap, Eye, Bot, Volume2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,6 @@ export function SnippetCard({
   const [mediaError, setMediaError] = useState(false);
   const [gifUrl, setGifUrl] = useState<string | null>(null);
   const [kenBurnsVariant] = useState(() => Math.floor(Math.random() * 3) + 1);
-  const mediaFetchedRef = useRef(false);
 
   // TTS for audio playback - uses cached audioUrl if available, autoplay when active
   const { speak, stop, isPlaying, isLoading } = useTTS({
@@ -92,11 +91,15 @@ export function SnippetCard({
     }
   }, [isActive, snippet.id]);
 
-  // Fetch GIF for this snippet (once per snippet)
+  // Reset media state when snippet changes
   useEffect(() => {
-    if (mediaFetchedRef.current) return;
-    mediaFetchedRef.current = true;
+    setMediaLoaded(false);
+    setMediaError(false);
+    setGifUrl(null);
+  }, [snippet.id]);
 
+  // Fetch GIF for this snippet
+  useEffect(() => {
     // If snippet already has a mediaUrl, use it
     if (snippet.mediaUrl) {
       const img = new Image();
@@ -107,15 +110,22 @@ export function SnippetCard({
     }
 
     // Otherwise, fetch a GIF
+    console.log('[Media] Fetching GIF for:', snippet.text.substring(0, 30));
     fetchGif(snippet.text, snippet.mediaPrompt).then(url => {
+      console.log('[Media] Got GIF URL:', url);
       if (url) {
         setGifUrl(url);
         // Preload the GIF
         const img = new Image();
         img.onload = () => setMediaLoaded(true);
-        img.onerror = () => setMediaError(true);
+        img.onerror = () => {
+          console.warn('[Media] Failed to load GIF:', url);
+          setMediaError(true);
+        };
         img.src = url;
       }
+    }).catch(err => {
+      console.warn('[Media] GIF fetch error:', err);
     });
   }, [snippet.id, snippet.text, snippet.mediaPrompt, snippet.mediaUrl]);
 
