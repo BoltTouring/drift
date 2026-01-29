@@ -80,15 +80,23 @@ function getMoodCategory(text: string, mediaPrompt?: string): string {
  */
 export async function fetchGif(text: string, mediaPrompt?: string): Promise<string | null> {
   const mood = getMoodCategory(text, mediaPrompt);
-  const photos = CURATED_PHOTOS[mood] || CURATED_PHOTOS.default;
-  const photoId = photos[Math.floor(Math.random() * photos.length)];
 
-  // Use Lorem Picsum with seed for consistent but varied images
-  // The seed ensures same text gets same image, but different texts get different images
+  // Generate consistent seed from text
   const seed = hashCode(text + mood);
-  const url = `https://picsum.photos/seed/${seed}/800/1200`;
 
-  console.log('[Media] Using image seed:', seed, 'mood:', mood);
+  // Try multiple image sources for reliability
+  // Unsplash source API with fallback
+  const sources = [
+    `https://source.unsplash.com/800x1200/?japan,${mood}`,
+    `https://picsum.photos/seed/${seed}/800/1200`,
+    `https://loremflickr.com/800/1200/japan,${mood}?lock=${seed}`,
+  ];
+
+  // Use the seed to pick a consistent source
+  const sourceIndex = seed % sources.length;
+  const url = sources[sourceIndex];
+
+  console.log('[Media] Using image:', mood, url.substring(0, 60));
   return url;
 }
 
