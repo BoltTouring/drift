@@ -61,7 +61,8 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
 
   return (
     // Type assertion needed due to version mismatch between @nostrify/nostrify and @nostrify/react
-    <NostrContext.Provider value={{ nostr: pool.current as any }}>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <NostrContext.Provider value={{ nostr: pool.current as unknown as any }}>
       {children}
     </NostrContext.Provider>
   );

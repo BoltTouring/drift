@@ -127,7 +127,8 @@ async function addAudioToFeed(items: PPQFeedItem[]): Promise<PPQFeedItem[]> {
  * Query params:
  * - audio=1: Include VoiceVox audio data URLs (slower, requires VoiceVox)
  */
-export default async function handler(req: any, res: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default async function handler(req: any, res: any): Promise<void> {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
@@ -160,10 +161,10 @@ export default async function handler(req: any, res: any) {
 
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.status(200).json({ items: feed });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({
       error: 'Feed generation failed',
-      message: err?.message ?? 'Unknown error',
+      message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 }

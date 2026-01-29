@@ -8,7 +8,7 @@
  * GET /api/tts?text=こんにちは&format=dataurl
  */
 
-import { synthesizeSpeech, synthesizeToDataUrl, isVoicevoxAvailable, VOICEVOX_SPEAKERS } from './voicevox';
+import { synthesizeSpeech, isVoicevoxAvailable, VOICEVOX_SPEAKERS } from './voicevox';
 
 // Simple in-memory cache for audio
 const audioCache = new Map<string, { data: ArrayBuffer; timestamp: number }>();
@@ -42,7 +42,8 @@ function cleanCache() {
   }
 }
 
-export default async function handler(req: any, res: any) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default async function handler(req: any, res: any): Promise<void> {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -112,11 +113,11 @@ export default async function handler(req: any, res: any) {
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.status(200).send(Buffer.from(audioBuffer));
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[TTS] Error:', err);
     res.status(500).json({
       error: 'TTS generation failed',
-      message: err?.message ?? 'Unknown error',
+      message: err instanceof Error ? err.message : 'Unknown error',
     });
   }
 }

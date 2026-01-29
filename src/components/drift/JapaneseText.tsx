@@ -6,7 +6,7 @@
 
 import { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { tokenizeJapanese, containsKanji, isKanji, isHiragana, isKatakana } from '@/lib/japanese';
+import { tokenizeJapanese, containsKanji, isHiragana, isKatakana } from '@/lib/japanese';
 
 interface JapaneseTextProps {
   text: string;
