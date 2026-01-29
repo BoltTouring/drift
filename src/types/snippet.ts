@@ -100,7 +100,8 @@ export interface Snippet {
   furigana?: FuriganaSegment[];
   /** 🎬 Optional AI media prompt (image/video background) */
   mediaPrompt?: string;
-}
+  /** Generated image URL from mediaPrompt */
+  mediaUrl?: string;
 }
 
 /**

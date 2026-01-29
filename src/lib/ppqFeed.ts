@@ -1,9 +1,12 @@
 /**
  * PPQ.ai Feed Loader
- * 
+ *
  * Fetches AI-generated language learning content from /api/feed.
  * Falls back to placeholder data if the API is unavailable (static-only deployment).
  */
+
+import type { LanguageCode } from '@/types/snippet';
+import { getUnsplashImage } from './imageGenerator';
 
 export interface PPQFeedItem {
   id: string;
@@ -161,34 +164,37 @@ export function ppqItemToSnippet(item: PPQFeedItem, language: string = 'ja'): im
   else if (textLength < 80) lengthClass = 'sentence';
   else lengthClass = 'paragraph';
 
-  return {
-  id: item.id,
-  text: item.jp,
-  language: language as LanguageCode,
-  translation: item.en,
-  dialectTag: '標準語',
-  topicTags: ['ai-generated', 'media-backed'],
-  lengthClass,
-  difficultyEstimate: levelToDifficulty[item.level] || 3,
-  source: {
-    isAiGenerated: true,
-    curatorPubkey: undefined,
-    originalAuthorPubkey: undefined,
-  },
-  createdAt: now,
-  safetyFlags: {
-    sensitive: false,
-    profanity: false,
-    adult: false,
-  },
-  popularity: {
-    likes: 0,
-    dislikes: 0,
-    saves: 0,
-    zaps: 0,
-    zapAmount: 0,
-  },
-  mediaPrompt: item.mediaPrompt,
-};
+  // Generate image URL from mediaPrompt
+  const mediaUrl = item.mediaPrompt ? getUnsplashImage(item.mediaPrompt) : undefined;
 
+  return {
+    id: item.id,
+    text: item.jp,
+    language: language as LanguageCode,
+    translation: item.en,
+    dialectTag: '標準語',
+    topicTags: ['ai-generated', 'media-backed'],
+    lengthClass,
+    difficultyEstimate: levelToDifficulty[item.level] || 3,
+    source: {
+      isAiGenerated: true,
+      curatorPubkey: undefined,
+      originalAuthorPubkey: undefined,
+    },
+    createdAt: now,
+    safetyFlags: {
+      sensitive: false,
+      profanity: false,
+      adult: false,
+    },
+    popularity: {
+      likes: 0,
+      dislikes: 0,
+      saves: 0,
+      zaps: 0,
+      zapAmount: 0,
+    },
+    mediaPrompt: item.mediaPrompt,
+    mediaUrl,
+  };
 }

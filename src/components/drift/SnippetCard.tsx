@@ -6,12 +6,12 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ThumbsUp, ThumbsDown, Star, Zap, Eye, Sparkles, Bot } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Zap, Eye, Bot, ImageOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { Snippet } from '@/types/snippet';
 import { JapaneseText } from './JapaneseText';
-import { containsKanji } from '@/lib/japanese';
+import { generatePlaceholderGradient } from '@/lib/imageGenerator';
 
 interface SnippetCardProps {
   snippet: Snippet;
@@ -48,13 +48,17 @@ export function SnippetCard({
 }: SnippetCardProps) {
   const [showMeaningButton, setShowMeaningButton] = useState(false);
   const [meaningRevealed, setMeaningRevealed] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Show meaning button after delay
   useEffect(() => {
     if (isActive) {
       setShowMeaningButton(false);
       setMeaningRevealed(false);
-      
+      setImageLoaded(false);
+      setImageError(false);
+
       const timer = setTimeout(() => {
         setShowMeaningButton(true);
       }, MEANING_DELAY);
@@ -62,6 +66,33 @@ export function SnippetCard({
       return () => clearTimeout(timer);
     }
   }, [isActive, snippet.id]);
+
+  // Preload image
+  useEffect(() => {
+    if (snippet.mediaUrl) {
+      const img = new Image();
+      img.onload = () => setImageLoaded(true);
+      img.onerror = () => setImageError(true);
+      img.src = snippet.mediaUrl;
+    }
+  }, [snippet.mediaUrl]);
+
+  // Background style - image or gradient fallback
+  const backgroundStyle = useMemo(() => {
+    if (snippet.mediaUrl && imageLoaded && !imageError) {
+      return {
+        backgroundImage: `url(${snippet.mediaUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      };
+    }
+    if (snippet.mediaPrompt) {
+      return {
+        background: generatePlaceholderGradient(snippet.mediaPrompt),
+      };
+    }
+    return {};
+  }, [snippet.mediaUrl, snippet.mediaPrompt, imageLoaded, imageError]);
 
   const handleMeaningReveal = useCallback(() => {
     setMeaningRevealed(!meaningRevealed);
@@ -81,17 +112,25 @@ export function SnippetCard({
   }, [isJapanese, furiganaMode]);
 
   return (
-    <div className="flex flex-col h-full w-full p-4 pt-12">
-      {/* Main content area */}
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="max-w-lg w-full">
-          {/* Snippet text */}
-          <div 
-            className={cn(
-              "text-center transition-all duration-300",
-              isJapanese ? "text-3xl md:text-4xl leading-relaxed" : "text-2xl md:text-3xl leading-relaxed"
-            )}
-          >
+    <div
+      className="relative flex flex-col h-full w-full overflow-hidden"
+      style={backgroundStyle}
+    >
+      {/* Gradient overlay for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70 pointer-events-none" />
+
+      {/* Content container */}
+      <div className="relative flex flex-col h-full w-full p-4 pt-12 z-10">
+        {/* Main content area */}
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="max-w-lg w-full">
+            {/* Snippet text */}
+            <div
+              className={cn(
+                "text-center transition-all duration-300 text-white drop-shadow-lg",
+                isJapanese ? "text-3xl md:text-4xl leading-relaxed" : "text-2xl md:text-3xl leading-relaxed"
+              )}
+            >
             {isJapanese ? (
               <JapaneseText
                 text={snippet.text}
@@ -108,101 +147,102 @@ export function SnippetCard({
             )}
           </div>
 
-          {/* Translation/meaning panel */}
-          <div
-            className={cn(
-              "mt-8 text-center transition-all duration-500 overflow-hidden",
-              meaningRevealed ? "opacity-100 max-h-40" : "opacity-0 max-h-0"
-            )}
-          >
-            {snippet.translation ? (
-              <p className="text-lg text-muted-foreground">{snippet.translation}</p>
-            ) : (
-              <p className="text-lg text-muted-foreground italic">
-                {dictionaryMode === 'L-E' 
-                  ? '[Translation not available]' 
-                  : isJapanese 
-                    ? '[訳なし]' 
-                    : '[No translation]'}
-              </p>
-            )}
-          </div>
-
-          {/* Meaning reveal button */}
-          <div className="mt-6 flex justify-center">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleMeaningReveal}
+            {/* Translation/meaning panel */}
+            <div
               className={cn(
-                "transition-all duration-300 gap-2",
-                showMeaningButton ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+                "mt-8 text-center transition-all duration-500 overflow-hidden",
+                meaningRevealed ? "opacity-100 max-h-40" : "opacity-0 max-h-0"
               )}
             >
-              <Eye className="h-5 w-5" />
-              {meaningRevealed ? 'Hide Meaning' : 'Show Meaning'}
-            </Button>
+              {snippet.translation ? (
+                <p className="text-lg text-white/80 drop-shadow">{snippet.translation}</p>
+              ) : (
+                <p className="text-lg text-white/60 italic drop-shadow">
+                  {dictionaryMode === 'L-E'
+                    ? '[Translation not available]'
+                    : isJapanese
+                      ? '[訳なし]'
+                      : '[No translation]'}
+                </p>
+              )}
+            </div>
+
+            {/* Meaning reveal button */}
+            <div className="mt-6 flex justify-center">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleMeaningReveal}
+                className={cn(
+                  "transition-all duration-300 gap-2 bg-white/10 border-white/30 text-white hover:bg-white/20",
+                  showMeaningButton ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+                )}
+              >
+                <Eye className="h-5 w-5" />
+                {meaningRevealed ? 'Hide Meaning' : 'Show Meaning'}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Bottom actions bar */}
-      <div className="flex justify-center items-center gap-3 pb-6">
-        {/* Dislike */}
-        <ActionButton
-          onClick={onDislike}
-          active={interaction?.disliked}
-          activeColor="text-red-500"
-          icon={<ThumbsDown className="h-6 w-6" />}
-          label="Dislike"
-        />
+        {/* Bottom actions bar */}
+        <div className="flex justify-center items-center gap-3 pb-6">
+          {/* Dislike */}
+          <ActionButton
+            onClick={onDislike}
+            active={interaction?.disliked}
+            activeColor="text-red-400"
+            icon={<ThumbsDown className="h-6 w-6" />}
+            label="Dislike"
+          />
 
-        {/* Like */}
-        <ActionButton
-          onClick={onLike}
-          active={interaction?.liked}
-          activeColor="text-green-500"
-          icon={<ThumbsUp className="h-6 w-6" />}
-          label="Like"
-        />
+          {/* Like */}
+          <ActionButton
+            onClick={onLike}
+            active={interaction?.liked}
+            activeColor="text-green-400"
+            icon={<ThumbsUp className="h-6 w-6" />}
+            label="Like"
+          />
 
-        {/* Save */}
-        <ActionButton
-          onClick={onSave}
-          active={interaction?.saved}
-          activeColor="text-yellow-500"
-          icon={<Star className={cn("h-6 w-6", interaction?.saved && "fill-current")} />}
-          label="Save"
-        />
+          {/* Save */}
+          <ActionButton
+            onClick={onSave}
+            active={interaction?.saved}
+            activeColor="text-yellow-400"
+            icon={<Star className={cn("h-6 w-6", interaction?.saved && "fill-current")} />}
+            label="Save"
+          />
 
-        {/* Zap */}
-        <ActionButton
-          onClick={onZap}
-          activeColor="text-orange-500"
-          icon={<Zap className="h-6 w-6" />}
-          label="Zap"
-        />
-      </div>
+          {/* Zap */}
+          <ActionButton
+            onClick={onZap}
+            activeColor="text-orange-400"
+            icon={<Zap className="h-6 w-6" />}
+            label="Zap"
+          />
+        </div>
 
-      {/* Metadata bar */}
-      <div className="absolute bottom-24 left-0 right-0 px-4">
-        <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
-          {snippet.dialectTag && (
-            <span className="px-2 py-1 bg-muted rounded-full">
-              {snippet.dialectTag}
-            </span>
-          )}
-          {snippet.topicTags.slice(0, 3).map(tag => (
-            <span key={tag} className="px-2 py-1 bg-muted rounded-full">
-              #{tag}
-            </span>
-          ))}
-          {snippet.source.isAiGenerated && (
-            <span className="px-2 py-1 bg-muted rounded-full flex items-center gap-1">
-              <Bot className="h-3 w-3" />
-              AI
-            </span>
-          )}
+        {/* Metadata bar */}
+        <div className="absolute bottom-24 left-0 right-0 px-4">
+          <div className="flex items-center justify-center gap-3 text-xs text-white/70">
+            {snippet.dialectTag && (
+              <span className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                {snippet.dialectTag}
+              </span>
+            )}
+            {snippet.topicTags.slice(0, 3).map(tag => (
+              <span key={tag} className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-full">
+                #{tag}
+              </span>
+            ))}
+            {snippet.source.isAiGenerated && (
+              <span className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-full flex items-center gap-1">
+                <Bot className="h-3 w-3" />
+                AI
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -226,8 +266,8 @@ function ActionButton({ onClick, active, activeColor, icon, label }: ActionButto
       }}
       className={cn(
         "p-3 rounded-full transition-all duration-200",
-        "hover:bg-muted active:scale-95",
-        active ? activeColor : "text-muted-foreground hover:text-foreground"
+        "hover:bg-white/20 active:scale-95 backdrop-blur-sm",
+        active ? activeColor : "text-white/70 hover:text-white"
       )}
       aria-label={label}
     >

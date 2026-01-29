@@ -13,6 +13,44 @@ import type {
   SafetyFlags,
 } from '@/types/snippet';
 import { estimateJapaneseDifficulty, containsSlang, isFormalJapanese } from './japanese';
+import { getUnsplashImage } from './imageGenerator';
+
+/** Generate a media prompt from topics */
+function generateMediaPrompt(topics: string[]): string {
+  const topicToScene: Record<string, string> = {
+    'daily-life': 'cozy everyday scene in Japan',
+    'weather': 'beautiful sky and weather scene',
+    'food': 'delicious Japanese food close-up',
+    'transport': 'busy Japanese train station',
+    'leisure': 'relaxing cafe atmosphere',
+    'work': 'modern office workspace',
+    'casual': 'friends chatting happily',
+    'surprise': 'surprised anime character expression',
+    'feelings': 'emotional peaceful moment',
+    'entertainment': 'vibrant entertainment scene',
+    'movies': 'cinema or movie theater atmosphere',
+    'formal': 'professional business setting',
+    'slang': 'trendy urban youth culture',
+    'internet': 'digital technology aesthetic',
+    'restaurants': 'warm restaurant interior',
+    'sushi': 'fresh sushi presentation',
+    'family': 'warm family gathering',
+    'travel': 'scenic Japanese landscape',
+    'nature': 'beautiful natural scenery',
+    'dreams': 'dreamy Mount Fuji view',
+    'relaxation': 'peaceful hot spring scene',
+    'technology': 'futuristic technology',
+    'apps': 'smartphone and modern tech',
+    'ai': 'artificial intelligence visualization',
+    'culture': 'traditional Japanese culture',
+    'seasons': 'beautiful seasonal scenery',
+    'religion': 'serene Japanese shrine',
+    'tradition': 'traditional Japanese clothing',
+  };
+
+  const firstTopic = topics[0] || 'daily-life';
+  return topicToScene[firstTopic] || 'peaceful Japanese scene';
+}
 
 /** Options for generating snippets */
 export interface GenerationOptions {
@@ -222,6 +260,10 @@ export async function generateSnippets(
       adult: false,
     };
     
+    // Generate media prompt and URL
+    const mediaPrompt = generateMediaPrompt(sample.topics);
+    const mediaUrl = getUnsplashImage(mediaPrompt);
+
     return {
       id,
       text: sample.text,
@@ -244,6 +286,8 @@ export async function generateSnippets(
         zaps: Math.floor(Math.random() * 3),
         zapAmount: Math.floor(Math.random() * 1000),
       },
+      mediaPrompt,
+      mediaUrl,
     };
   });
 }
