@@ -2,29 +2,26 @@
  * Media Service
  *
  * Fetches engaging media (GIFs, animated images) for snippets.
- * Prioritizes Giphy for anime/Japanese content, falls back to animated stills.
+ * Uses Tenor (Google's GIF API) for anime/Japanese content.
  */
 
-// Giphy API - free tier, 100 requests/hour
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // Public beta key - replace with your own for production
+// Tenor API - free tier, generous limits
+// Get your own key at: https://developers.google.com/tenor/guides/quickstart
+const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ'; // Public demo key
 
-interface GiphyImage {
-  url: string;
-  width: string;
-  height: string;
+interface TenorMedia {
+  gif: { url: string };
+  mediumgif: { url: string };
+  tinygif: { url: string };
 }
 
-interface GiphyGif {
+interface TenorResult {
   id: string;
-  images: {
-    original: GiphyImage;
-    downsized_medium: GiphyImage;
-    fixed_height: GiphyImage;
-  };
+  media_formats: TenorMedia;
 }
 
-interface GiphyResponse {
-  data: GiphyGif[];
+interface TenorResponse {
+  results: TenorResult[];
 }
 
 // Cache to avoid duplicate API calls
@@ -92,7 +89,7 @@ function extractSearchTerms(text: string, mediaPrompt?: string): string {
 }
 
 /**
- * Fetch a GIF from Giphy based on text content
+ * Fetch a GIF from Tenor based on text content
  */
 export async function fetchGif(text: string, mediaPrompt?: string): Promise<string | null> {
   const searchTerm = extractSearchTerms(text, mediaPrompt);
@@ -105,29 +102,33 @@ export async function fetchGif(text: string, mediaPrompt?: string): Promise<stri
 
   try {
     const response = await fetch(
-      `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(searchTerm)}&limit=25&rating=g`
+      `https://tenor.googleapis.com/v2/search?key=${TENOR_API_KEY}&q=${encodeURIComponent(searchTerm)}&limit=20&media_filter=gif,mediumgif`
     );
 
     if (!response.ok) {
-      console.warn('[Media] Giphy API error:', response.status);
+      console.warn('[Media] Tenor API error:', response.status);
       return null;
     }
 
-    const data: GiphyResponse = await response.json();
+    const data: TenorResponse = await response.json();
 
-    if (data.data.length === 0) {
+    if (!data.results || data.results.length === 0) {
+      console.log('[Media] No results for:', searchTerm);
       return null;
     }
 
     // Pick a random GIF from results for variety
-    const randomIndex = Math.floor(Math.random() * Math.min(data.data.length, 10));
-    const gif = data.data[randomIndex];
+    const randomIndex = Math.floor(Math.random() * Math.min(data.results.length, 10));
+    const gif = data.results[randomIndex];
 
-    // Use downsized for performance, original for quality
-    const url = gif.images.downsized_medium?.url || gif.images.original.url;
+    // Use mediumgif for balance of quality and performance
+    const url = gif.media_formats?.mediumgif?.url || gif.media_formats?.gif?.url;
 
-    mediaCache.set(cacheKey, url);
-    return url;
+    if (url) {
+      mediaCache.set(cacheKey, url);
+      console.log('[Media] Found GIF:', url.substring(0, 50));
+    }
+    return url || null;
   } catch (error) {
     console.warn('[Media] Failed to fetch GIF:', error);
     return null;
