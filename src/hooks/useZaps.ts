@@ -203,7 +203,8 @@ export function useZaps(
 
       const zapRequest = nip57.makeZapRequest({
         profile: actualTarget.pubkey,
-        event: event,
+        // Type assertion: event can be NostrEvent (for 'a' tag) or string ID (for 'e' tag)
+        event: event as any,
         amount: zapAmount,
         relays: config.relayMetadata.relays.map(r => r.url),
         comment

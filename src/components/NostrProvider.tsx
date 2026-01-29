@@ -60,7 +60,8 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
   }
 
   return (
-    <NostrContext.Provider value={{ nostr: pool.current }}>
+    // Type assertion needed due to version mismatch between @nostrify/nostrify and @nostrify/react
+    <NostrContext.Provider value={{ nostr: pool.current as any }}>
       {children}
     </NostrContext.Provider>
   );
