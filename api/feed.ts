@@ -1,7 +1,12 @@
 /**
  * PPQ.ai Feed API Endpoint
  * Server-side only
+ *
+ * Generates Japanese learning content with optional audio.
+ * Add ?audio=1 to include VoiceVox audio data URLs.
  */
+
+import { synthesizeToDataUrl, isVoicevoxAvailable } from './voicevox';
 
 type PPQFeedItem = {
   id: string;
@@ -9,6 +14,7 @@ type PPQFeedItem = {
   en: string;
   level: 'N5' | 'N4' | 'N3' | 'N2';
   mediaPrompt?: string;
+  audioUrl?: string; // VoiceVox-generated audio
 };
 
 // In-memory cache (resets on cold start)
@@ -90,7 +96,36 @@ Format:
 }
 
 /**
+ * Generate audio for feed items using VoiceVox
+ */
+async function addAudioToFeed(items: PPQFeedItem[]): Promise<PPQFeedItem[]> {
+  const voicevoxAvailable = await isVoicevoxAvailable();
+  if (!voicevoxAvailable) {
+    console.warn('[Feed] VoiceVox not available, skipping audio generation');
+    return items;
+  }
+
+  // Generate audio for each item in parallel
+  const withAudio = await Promise.all(
+    items.map(async (item) => {
+      try {
+        const audioUrl = await synthesizeToDataUrl(item.jp);
+        return { ...item, audioUrl };
+      } catch (err) {
+        console.warn(`[Feed] Audio generation failed for: ${item.jp}`, err);
+        return item;
+      }
+    })
+  );
+
+  return withAudio;
+}
+
+/**
  * Vercel / Shakespeare-compatible handler
+ *
+ * Query params:
+ * - audio=1: Include VoiceVox audio data URLs (slower, requires VoiceVox)
  */
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -98,15 +133,28 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  const includeAudio = req.query?.audio === '1';
+
   try {
     const now = Date.now();
+
+    // Check cache (but skip if audio requested and cached items don't have audio)
     if (cachedFeed && now - cacheTimestamp < CACHE_TTL) {
-      res.setHeader('Cache-Control', 'public, max-age=300');
-      res.status(200).json({ items: cachedFeed });
-      return;
+      const hasAudio = cachedFeed[0]?.audioUrl != null;
+      if (!includeAudio || hasAudio) {
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.status(200).json({ items: cachedFeed });
+        return;
+      }
     }
 
-    const feed = await generateFeed();
+    let feed = await generateFeed();
+
+    // Add audio if requested
+    if (includeAudio) {
+      feed = await addAudioToFeed(feed);
+    }
+
     cachedFeed = feed;
     cacheTimestamp = now;
 

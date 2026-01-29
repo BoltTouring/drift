@@ -14,6 +14,7 @@ export interface PPQFeedItem {
   en: string; // English translation
   level: 'N5' | 'N4' | 'N3' | 'N2'; // JLPT level
   mediaPrompt?: string; // Optional image generation prompt
+  audioUrl?: string; // Pre-generated audio URL (from VoiceVox)
 }
 
 /**
@@ -196,5 +197,6 @@ export function ppqItemToSnippet(item: PPQFeedItem, language: string = 'ja'): im
     },
     mediaPrompt: item.mediaPrompt,
     mediaUrl,
+    audioUrl: item.audioUrl,
   };
 }
