@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
 "scripts": {
+  "dev": "vite",
   "build": "vite build -l error && cp dist/index.html dist/404.html && echo \"Project built successfully!\"",
+  "preview": "vite preview",
   "test": "tsc --noEmit && eslint && vitest run --reporter=dot --silent && vite build -l error && cp dist/index.html dist/404.html && echo \"All tests passed!\""
 },
 
