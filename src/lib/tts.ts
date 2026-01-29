@@ -14,6 +14,11 @@ export interface TTSOptions {
   speaker?: number; // VoiceVox speaker ID (default: 四国めたん)
 }
 
+// VoiceVox endpoint - use localhost in dev, API route in prod
+const VOICEVOX_URL = import.meta.env.DEV
+  ? 'http://localhost:50021'
+  : null; // In production, use /api/tts
+
 /**
  * Generate speech audio from text using VoiceVox TTS
  * Returns a blob URL for the audio, or null if unavailable
@@ -28,32 +33,53 @@ export async function generateSpeech(options: TTSOptions): Promise<string | null
   }
 
   try {
-    // Try our VoiceVox API endpoint
-    const params = new URLSearchParams({
-      text,
-      speaker: speaker.toString(),
-      format: 'mp3',
-    });
+    let audioBlob: Blob;
 
-    const response = await fetch(`/api/tts?${params}`);
+    if (VOICEVOX_URL) {
+      // Dev mode: call VoiceVox directly
+      // Step 1: Create audio query
+      const queryResponse = await fetch(
+        `${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(text)}&speaker=${speaker}`,
+        { method: 'POST' }
+      );
+      if (!queryResponse.ok) {
+        console.info('[TTS] VoiceVox not running (start docker container)');
+        return null;
+      }
+      const query = await queryResponse.json();
 
-    if (!response.ok) {
-      // VoiceVox not available - that's okay, audio is optional
-      console.info('[TTS] VoiceVox not available (run docker to enable)');
-      return null;
+      // Step 2: Synthesize audio
+      const synthesisResponse = await fetch(
+        `${VOICEVOX_URL}/synthesis?speaker=${speaker}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(query),
+        }
+      );
+      if (!synthesisResponse.ok) {
+        return null;
+      }
+      audioBlob = await synthesisResponse.blob();
+    } else {
+      // Production: use API route
+      const params = new URLSearchParams({
+        text,
+        speaker: speaker.toString(),
+      });
+      const response = await fetch(`/api/tts?${params}`);
+      if (!response.ok) {
+        return null;
+      }
+      audioBlob = await response.blob();
     }
 
-    // Get audio blob and create URL
-    const audioBlob = await response.blob();
     const audioUrl = URL.createObjectURL(audioBlob);
-
-    // Cache it
     audioCache.set(cacheKey, audioUrl);
-
     return audioUrl;
   } catch (error) {
-    // Network error or API not running - audio is optional
-    console.info('[TTS] TTS API not available:', error);
+    // Network error or VoiceVox not running - audio is optional
+    console.info('[TTS] VoiceVox not available');
     return null;
   }
 }
