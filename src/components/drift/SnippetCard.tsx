@@ -6,12 +6,13 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ThumbsUp, ThumbsDown, Star, Zap, Eye, Bot, ImageOff } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Zap, Eye, Bot, Volume2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { Snippet } from '@/types/snippet';
 import { JapaneseText } from './JapaneseText';
 import { generatePlaceholderGradient } from '@/lib/imageGenerator';
+import { useTTS } from '@/hooks/useTTS';
 
 interface SnippetCardProps {
   snippet: Snippet;
@@ -50,6 +51,26 @@ export function SnippetCard({
   const [meaningRevealed, setMeaningRevealed] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+
+  // TTS for audio playback
+  const { speak, stop, isPlaying, isLoading } = useTTS({
+    language: targetLanguage === 'ja' ? 'ja-JP' : 'en-US',
+  });
+
+  const handlePlayAudio = useCallback(() => {
+    if (isPlaying) {
+      stop();
+    } else {
+      speak(snippet.text);
+    }
+  }, [isPlaying, stop, speak, snippet.text]);
+
+  // Stop audio when navigating away
+  useEffect(() => {
+    if (!isActive && isPlaying) {
+      stop();
+    }
+  }, [isActive, isPlaying, stop]);
 
   // Show meaning button after delay
   useEffect(() => {
@@ -167,8 +188,29 @@ export function SnippetCard({
               )}
             </div>
 
-            {/* Meaning reveal button */}
-            <div className="mt-6 flex justify-center">
+            {/* Action buttons row */}
+            <div className="mt-6 flex justify-center gap-3">
+              {/* Audio playback button */}
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handlePlayAudio}
+                disabled={isLoading}
+                className={cn(
+                  "transition-all duration-300 gap-2 bg-white/10 border-white/30 text-white hover:bg-white/20",
+                  showMeaningButton ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none",
+                  isPlaying && "bg-white/20 border-white/50"
+                )}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Volume2 className={cn("h-5 w-5", isPlaying && "text-blue-400")} />
+                )}
+                {isPlaying ? 'Stop' : 'Listen'}
+              </Button>
+
+              {/* Meaning reveal button */}
               <Button
                 variant="outline"
                 size="lg"
@@ -179,7 +221,7 @@ export function SnippetCard({
                 )}
               >
                 <Eye className="h-5 w-5" />
-                {meaningRevealed ? 'Hide Meaning' : 'Show Meaning'}
+                {meaningRevealed ? 'Hide' : 'Meaning'}
               </Button>
             </div>
           </div>
