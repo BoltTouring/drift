@@ -98,34 +98,27 @@ export function SnippetCard({
     setGifUrl(null);
   }, [snippet.id]);
 
-  // Fetch GIF for this snippet
+  // Get image URL for this snippet (no preloading - let CSS handle it)
   useEffect(() => {
     // If snippet already has a mediaUrl, use it
     if (snippet.mediaUrl) {
-      const img = new Image();
-      img.onload = () => setMediaLoaded(true);
-      img.onerror = () => setMediaError(true);
-      img.src = snippet.mediaUrl;
+      setGifUrl(snippet.mediaUrl);
+      setMediaLoaded(true);
       return;
     }
 
-    // Otherwise, fetch a GIF
-    console.log('[Media] Fetching GIF for:', snippet.text.substring(0, 30));
+    // Otherwise, get an image URL
+    console.log('[Media] Getting image for:', snippet.text.substring(0, 30));
     fetchGif(snippet.text, snippet.mediaPrompt).then(url => {
-      console.log('[Media] Got GIF URL:', url);
+      console.log('[Media] Image URL:', url);
       if (url) {
         setGifUrl(url);
-        // Preload the GIF
-        const img = new Image();
-        img.onload = () => setMediaLoaded(true);
-        img.onerror = () => {
-          console.warn('[Media] Failed to load GIF:', url);
-          setMediaError(true);
-        };
-        img.src = url;
+        // Don't preload - CSS background-image handles cross-origin better
+        // Just mark as loaded after a short delay to trigger fade-in
+        setTimeout(() => setMediaLoaded(true), 100);
       }
     }).catch(err => {
-      console.warn('[Media] GIF fetch error:', err);
+      console.warn('[Media] Image fetch error:', err);
     });
   }, [snippet.id, snippet.text, snippet.mediaPrompt, snippet.mediaUrl]);
 
